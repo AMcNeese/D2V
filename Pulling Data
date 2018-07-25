@@ -1,0 +1,75 @@
+// Program: uch_cd_dataload.ipynb
+// Name: Angela McNeese
+// Date: 7/25/2018
+// Project: Data loading
+// Usage: Notes and code for how to load data into pgAdmin using Pandas, JupyterLab and Putty
+
+## Use this code in a Jupyter Notebook unless otehrwise noted
+## Note: Open Jypyter Lab from a directory with proper access permissions, or else (frustration.)
+
+import pandas as pd
+from sqlalchemy import create_engine
+import psycopg2 
+import io
+
+engine = create_engine('postgresql://uchcd:uchcd@localhost:5432/username')  #### Change Username
+conn = engine.raw_connection()
+cur = conn.cursor()
+
+# first create table slice; Do this from the command line. 
+# head -n 100 /filepath_to_original_file.csv > /filepath_to_new_location_head.csv
+# This number may need to be increased later if it improperly detects data types with only this many lines, 
+# just increase head -n size to include the line number that throws an error if so.
+
+df = pd.read_csv('/filepath_to_file_head.csv')
+
+df.head()
+# Prints a few lines of the file. Check that it looks correct. 
+
+df.to_sql('tablename', engine, if_exists='replace', index = False, dtype = None) ## Change Tablename
+
+# Check the table in pgAdmin now to see that the datatypes match expectations
+####
+####  Changes may not be reflected quickly in pgAdmin; be patient and use right click > refresh 
+####
+# if table looks as expected then continue, else revisit and correct as needed 
+
+# need to truncate table before loading all data...
+cur.execute('truncate table tablename')  ## change tablename!!
+conn.commit()
+
+cur.execute('SELECT COUNT(*) FROM tablename') ## Change tablename!!
+rows = cur.fetchall()
+rows
+## This should show 0 as result at this point
+
+## This finds all the files for a group and processes them all at once for: part1.csv, part2.csv, part3.csv etc
+## Adjust according to your file finding needs
+
+file_name = '/filepath_to_original_file_part'   
+for n in range(1, 5):
+    f = file_name + str(n) + '.csv'
+    csv_file = open(f, 'r', encoding='utf-8')
+    cur.copy_expert("COPY tablename from stdin with csv header delimiter as ','", file=csv_file)  ##Change tablename!!
+
+# if failed, run this
+#conn.rollback()
+# if good, commit changes
+conn.commit()
+
+# verify table has correct total number of rows:
+# in pgadmin*
+#  `select count(*) from tablename`   ## Change tablename
+# OR just run below code to check line count (since pgAdmin will need refreshing to reflect changes)
+
+cur.execute('SELECT COUNT(*) FROM medication')
+rows = cur.fetchall()
+rows
+## Results should now match output from below command line code ...
+
+#from command line*
+# cat ./filepath_to_original | wc -l (<- this is a lowercase L, for 'wordcount -lines') 
+# The count from command line will be a few higher since header lines will have been removed from the pgAdmin table
+
+
+
